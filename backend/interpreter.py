@@ -1,13 +1,41 @@
 from __future__ import annotations
 
+import os
 import re
 from typing import Optional
+
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    # Always load .env from the backend directory regardless of cwd
+    _env_path = Path(__file__).resolve().parent / ".env"
+    load_dotenv(_env_path)
+except ImportError:
+    pass
+
+try:
+    import anthropic
+    _AI_AVAILABLE = bool(os.environ.get("ANTHROPIC_API_KEY"))
+except ImportError:
+    _AI_AVAILABLE = False
+
+_AI_SYSTEM_PROMPT = (
+    "You translate English programming instructions into Python code.\n"
+    "Rules:\n"
+    "- Return ONLY valid Python code, no explanations, no markdown fences.\n"
+    "- Use simple, beginner-friendly Python.\n"
+    "- If the instruction is ambiguous, make a reasonable assumption.\n"
+    "- Always include print() for any output the user expects to see.\n"
+    "- Keep it concise."
+)
 
 
 class EnglishInterpreter:
     """Translates English instructions into Python code."""
 
     def __init__(self):
+        self._ai_client = anthropic.Anthropic() if _AI_AVAILABLE else None
         self.patterns = [
             # Assignment: set X to N
             (
@@ -395,6 +423,26 @@ class EnglishInterpreter:
                 return handler(m), cmd_type
         return None
 
+    def _ai_translate(self, english: str) -> Optional[str]:
+        """Use Claude to translate English that regex couldn't handle."""
+        if not self._ai_client:
+            return None
+        try:
+            response = self._ai_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=512,
+                system=_AI_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": english}],
+            )
+            code = response.content[0].text.strip()
+            # Strip markdown fences if the model included them anyway
+            if code.startswith("```"):
+                code = re.sub(r"^```\w*\n?", "", code)
+                code = re.sub(r"\n?```$", "", code)
+            return code.strip()
+        except Exception:
+            return None
+
     # ── Public API ─────────────────────────────────────────────────────
 
     def classify(self, code: str) -> list[dict]:
@@ -455,6 +503,19 @@ class EnglishInterpreter:
             result = self._match_line(stripped)
 
             if result is None:
+                # Try AI fallback for the entire remaining input
+                remaining = "\n".join(
+                    l for l in lines[idx:] if l.strip()
+                )
+                ai_code = self._ai_translate(remaining)
+                if ai_code:
+                    # AI handled everything from here onward as a block
+                    translations.append(
+                        {"english": remaining, "python": ai_code, "line": idx}
+                    )
+                    for ai_line in ai_code.split("\n"):
+                        python_lines.append(f"{_current_indent()}{ai_line}")
+                    break  # AI consumed the rest
                 translations.append(
                     {
                         "english": stripped,

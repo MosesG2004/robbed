@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from interpreter import EnglishInterpreter
+from interpreter import EnglishInterpreter, _AI_AVAILABLE
 from executor import SafeExecutor
 
 # ── App setup ──────────────────────────────────────────────────────────
@@ -67,6 +67,12 @@ class RunResponse(BaseModel):
 
 
 # ── Routes ─────────────────────────────────────────────────────────────
+
+
+@app.get("/status")
+def status():
+    """Check if AI fallback is available."""
+    return {"ai_enabled": _AI_AVAILABLE}
 
 
 @app.post("/parse", response_model=ParseResponse)

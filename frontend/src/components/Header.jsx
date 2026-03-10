@@ -25,7 +25,7 @@ function ProcessingDots() {
   )
 }
 
-export default function Header({ phase, onRun }) {
+export default function Header({ phase, onRun, aiEnabled }) {
   const isRunning = phase !== 'idle' && phase !== 'complete'
   const label = phaseLabels[phase] || 'READY'
 
@@ -51,6 +51,14 @@ export default function Header({ phase, onRun }) {
         >
           ENGLISH &rarr; PYTHON TRANSLATOR
         </span>
+        {aiEnabled && (
+          <span
+            className="text-xs px-2 py-0.5 rounded border"
+            style={{ color: '#39ff14', borderColor: '#39ff1440', backgroundColor: '#39ff1410' }}
+          >
+            AI ENABLED
+          </span>
+        )}
       </div>
 
       {/* Status + Run Button */}

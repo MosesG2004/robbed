@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 
 const API_BASE = 'http://localhost:8000'
 
@@ -23,7 +23,15 @@ export function useProteus() {
   const [translations, setTranslations] = useState([])
   const [currentLine, setCurrentLine] = useState(-1)
   const [error, setError] = useState(null)
+  const [aiEnabled, setAiEnabled] = useState(false)
   const abortRef = useRef(false)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/status`)
+      .then(r => r.json())
+      .then(data => setAiEnabled(data.ai_enabled))
+      .catch(() => setAiEnabled(false))
+  }, [])
 
   const addOutput = useCallback((line, type = 'info') => {
     setOutput(prev => [...prev, { text: line, type, id: Date.now() + Math.random() }])
@@ -202,5 +210,6 @@ export function useProteus() {
     error,
     runProgram,
     reset,
+    aiEnabled,
   }
 }

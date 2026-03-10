@@ -7,6 +7,7 @@ A hacker-style web application that translates simple English programming instru
 ## Features
 
 - **English to Python translation** — write instructions in plain English, see them converted to Python in real-time
+- **AI-powered fallback** — commands the regex engine can't handle are translated by Claude (Haiku 4.5), so you can write _any_ English instruction
 - **Live execution** — run your programs and see output instantly
 - **Variable memory tracking** — watch variables change as your program executes
 - **Cyberpunk terminal UI** — dark hacker aesthetic with neon green glow effects and smooth animations
@@ -67,17 +68,33 @@ git clone https://github.com/Positivitty/proteus.git
 cd proteus
 ```
 
-### 2. Start the backend
+### 2. Set up the backend
 
 ```bash
 cd backend
 pip install -r requirements.txt
+```
+
+### 3. (Optional) Enable AI mode
+
+To translate _any_ English instruction (not just built-in patterns), add your Anthropic API key:
+
+```bash
+cp .env.example .env
+# Edit .env and add your key from https://console.anthropic.com/settings/keys
+```
+
+Without a key, the app still works using the built-in regex patterns. With a key, unrecognized commands are sent to Claude Haiku (~$0.0005 per call).
+
+### 4. Start the backend
+
+```bash
 uvicorn main:app --reload
 ```
 
 The API server runs at `http://localhost:8000`.
 
-### 3. Start the frontend
+### 5. Start the frontend
 
 In a separate terminal:
 
@@ -95,9 +112,10 @@ The app opens at `http://localhost:3000`.
 proteus/
 ├── backend/
 │   ├── main.py              # FastAPI app with /parse, /translate, /run endpoints
-│   ├── interpreter.py        # English-to-Python regex-based translator
+│   ├── interpreter.py        # English-to-Python translator (regex + AI fallback)
 │   ├── executor.py           # Safe Python execution sandbox
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── .env.example          # API key template
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx           # Main 4-panel layout
@@ -118,5 +136,5 @@ proteus/
 
 ## Tech Stack
 
-- **Backend:** FastAPI, Python
+- **Backend:** Python, FastAPI, Anthropic SDK (Claude Haiku 4.5)
 - **Frontend:** React, Vite, Tailwind CSS v4, Framer Motion, CodeMirror
