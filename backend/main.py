@@ -47,11 +47,13 @@ class Translation(BaseModel):
     english: str
     python: str
     line: int
+    explanation: Optional[str] = None
 
 
 class TranslateResponse(BaseModel):
     translations: List[Translation]
     full_code: str
+    explanations: List[dict]
 
 
 class VariableSnapshot(BaseModel):
@@ -86,7 +88,16 @@ def parse_code(body: CodeInput):
 def translate_code(body: CodeInput):
     """Translate English instructions into Python source code."""
     translations, full_code = interpreter.translate(body.code)
-    return TranslateResponse(translations=translations, full_code=full_code)
+    explanations = interpreter.explain(translations, full_code)
+    return TranslateResponse(translations=translations, full_code=full_code, explanations=explanations)
+
+
+@app.post("/explain")
+def explain_code(body: CodeInput):
+    """Generate line-by-line explanations for translated code."""
+    translations, full_code = interpreter.translate(body.code)
+    explanations = interpreter.explain(translations, full_code)
+    return {"explanations": explanations}
 
 
 @app.post("/run", response_model=RunResponse)

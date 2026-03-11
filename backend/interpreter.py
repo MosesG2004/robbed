@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from typing import Optional
@@ -28,6 +29,15 @@ _AI_SYSTEM_PROMPT = (
     "- If the instruction is ambiguous, make a reasonable assumption.\n"
     "- Always include print() for any output the user expects to see.\n"
     "- Keep it concise."
+)
+
+_AI_EXPLAIN_PROMPT = (
+    "Explain this Python code line by line for a beginner.\n"
+    "Rules:\n"
+    "- Return a JSON array of objects: [{\"line\": 0, \"python\": \"...\", \"explanation\": \"...\"}]\n"
+    "- Each explanation should be 1-2 sentences, beginner-friendly\n"
+    "- Explain WHY, not just WHAT\n"
+    "- Return ONLY valid JSON, no markdown"
 )
 
 
@@ -442,6 +452,228 @@ class EnglishInterpreter:
             return code.strip()
         except Exception:
             return None
+
+    # ── Explanation engine ─────────────────────────────────────────────
+
+    def explain(self, translations: list[dict], full_code: str) -> list[dict]:
+        """Generate line-by-line explanations for translated code."""
+        explanations = []
+        for t in translations:
+            english = t["english"]
+            python = t["python"]
+            # If the Python code contains newlines, it came from AI — use AI to explain
+            if "\n" in python:
+                ai_explanations = self._ai_explain(python)
+                if ai_explanations:
+                    explanations.extend(ai_explanations)
+                    continue
+            explanation = self._explain_line(english, python)
+            explanations.append({
+                "line": t["line"],
+                "python": python,
+                "explanation": explanation,
+            })
+        return explanations
+
+    def _explain_line(self, english: str, python: str) -> str:
+        """Generate a beginner-friendly explanation based on pattern matching the Python code."""
+        code = python.strip()
+
+        # Unrecognized
+        if code.startswith("# unrecognized:"):
+            return "This instruction couldn't be translated. Try rephrasing using supported commands."
+
+        # sort with reverse=True: x.sort(reverse=True)
+        m = re.match(r"^(\w+)\.sort\(reverse=True\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Sorts '{var}' in descending order (largest first)."
+
+        # sort: x.sort()
+        m = re.match(r"^(\w+)\.sort\(\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Sorts '{var}' in ascending order, modifying the original list in place."
+
+        # append: x.append(...)
+        m = re.match(r"^(\w+)\.append\((.+)\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Adds a new item to the end of list '{var}'. The list grows by one."
+
+        # remove: x.remove(...)
+        m = re.match(r"^(\w+)\.remove\((.+)\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Removes the first occurrence of the value from list '{var}'."
+
+        # print(min(x, key=len))
+        m = re.match(r"^print\(min\((\w+),\s*key=len\)\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Finds the shortest string in '{var}' by comparing lengths, then displays it. min() with key=len compares items by their character count."
+
+        # print(max(x, key=len))
+        m = re.match(r"^print\(max\((\w+),\s*key=len\)\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Finds the longest string in '{var}' by comparing lengths, then displays it."
+
+        # print(min(x))
+        m = re.match(r"^print\(min\((\w+)\)\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Finds and displays the smallest value in '{var}'. min() returns the lowest item."
+
+        # print(max(x))
+        m = re.match(r"^print\(max\((\w+)\)\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Finds and displays the largest value in '{var}'. max() returns the highest item."
+
+        # print(len(x))
+        m = re.match(r"^print\(len\((\w+)\)\)$", code)
+        if m:
+            var = m.group(1)
+            return f"Counts and displays the number of items in '{var}'."
+
+        # print(x)
+        m = re.match(r"^print\((.+)\)$", code)
+        if m:
+            expr = m.group(1)
+            return f"Displays the current value of '{expr}' to the screen. print() is Python's way of showing output."
+
+        # for _i in range(N):
+        m = re.match(r"^for\s+\w+\s+in\s+range\((\d+)\):$", code)
+        if m:
+            count = m.group(1)
+            return f"Starts a loop that repeats {count} times. range({count}) generates numbers from 0 to {int(count) - 1}. Everything indented below runs each iteration."
+
+        # for item in collection:
+        m = re.match(r"^for\s+(\w+)\s+in\s+(\w+):$", code)
+        if m:
+            item = m.group(1)
+            collection = m.group(2)
+            return f"Loops through each item in '{collection}' one at a time. Each iteration, '{item}' holds the current value."
+
+        # while x > N:
+        m = re.match(r"^while\s+(\w+)\s+>\s+(.+):$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Keeps repeating as long as '{var}' is greater than {val}. Be careful — if the condition never becomes false, the loop runs forever."
+
+        # while x < N:
+        m = re.match(r"^while\s+(\w+)\s+<\s+(.+):$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Keeps repeating as long as '{var}' is less than {val}. Be careful — if the condition never becomes false, the loop runs forever."
+
+        # while x != N:
+        m = re.match(r"^while\s+(\w+)\s+!=\s+(.+):$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Keeps repeating as long as '{var}' is not equal to {val}. Be careful — if the condition never becomes false, the loop runs forever."
+
+        # if x == N:
+        m = re.match(r"^if\s+(\w+)\s+==\s+(.+):$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Checks if '{var}' equals {val}. The code indented below only runs if this is true. Note: == compares, = assigns."
+
+        # if x > N:
+        m = re.match(r"^if\s+(\w+)\s+>\s+(.+):$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Checks if '{var}' is greater than {val}. The indented block below runs only when this condition is true."
+
+        # if x < N:
+        m = re.match(r"^if\s+(\w+)\s+<\s+(.+):$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Checks if '{var}' is less than {val}."
+
+        # x += N
+        m = re.match(r"^(\w+)\s*\+=\s*(.+)$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Adds {val} to the current value of '{var}' and saves the result back. This is shorthand for {var} = {var} + {val}."
+
+        # x -= N
+        m = re.match(r"^(\w+)\s*-=\s*(.+)$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Subtracts {val} from '{var}'. Shorthand for {var} = {var} - {val}."
+
+        # x *= N
+        m = re.match(r"^(\w+)\s*\*=\s*(.+)$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Multiplies '{var}' by {val}. Shorthand for {var} = {var} * {val}."
+
+        # x /= N
+        m = re.match(r"^(\w+)\s*/=\s*(.+)$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Divides '{var}' by {val}. Shorthand for {var} = {var} / {val}."
+
+        # x = [...] (list assignment)
+        m = re.match(r"^(\w+)\s*=\s*\[(.+)\]$", code)
+        if m:
+            var = m.group(1)
+            items_str = m.group(2)
+            item_count = len([i.strip() for i in items_str.split(",") if i.strip()])
+            return f"Creates a list called '{var}' containing {item_count} items. A list is an ordered collection that can hold multiple values."
+
+        # x = input(...)
+        m = re.match(r"^(\w+)\s*=\s*input\(", code)
+        if m:
+            var = m.group(1)
+            return f"Asks the user to type something and stores their response in '{var}'. input() pauses the program and waits for keyboard input."
+
+        # x = <value> (simple assignment)
+        m = re.match(r"^(\w+)\s*=\s*(.+)$", code)
+        if m:
+            var = m.group(1)
+            val = m.group(2)
+            return f"Creates a variable called '{var}' and stores the value {val} in it. Think of a variable as a labeled box that holds data."
+
+        # Fallback
+        return f"Executes: {code}"
+
+    def _ai_explain(self, python_code: str) -> Optional[list[dict]]:
+        """Use Claude to explain multi-line AI-generated Python code."""
+        if not self._ai_client:
+            return None
+        try:
+            response = self._ai_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1024,
+                system=_AI_EXPLAIN_PROMPT,
+                messages=[{"role": "user", "content": python_code}],
+            )
+            raw = response.content[0].text.strip()
+            # Strip markdown fences if included
+            if raw.startswith("```"):
+                raw = re.sub(r"^```\w*\n?", "", raw)
+                raw = re.sub(r"\n?```$", "", raw)
+            return json.loads(raw.strip())
+        except Exception:
+            # Fallback: return a single explanation for the whole block
+            return [{
+                "line": 0,
+                "python": python_code,
+                "explanation": "This code was generated by AI. Review it carefully to understand what it does.",
+            }]
 
     # ── Public API ─────────────────────────────────────────────────────
 

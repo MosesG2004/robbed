@@ -3,6 +3,7 @@ import HumanTerminal from './components/HumanTerminal'
 import PythonPanel from './components/PythonPanel'
 import VariableMemory from './components/VariableMemory'
 import OutputConsole from './components/OutputConsole'
+import ExplanationPanel from './components/ExplanationPanel'
 import { useProteus } from './hooks/useProteus'
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
     englishCode,
     setEnglishCode,
     pythonCode,
+    explanations,
     variables,
     output,
     phase,
@@ -29,7 +31,7 @@ function App() {
         className="flex-1 grid gap-2 p-2 min-h-0"
         style={{
           gridTemplateColumns: '1fr 1fr',
-          gridTemplateRows: '1fr 1fr',
+          gridTemplateRows: '2fr 1fr 1fr',
         }}
       >
         <HumanTerminal
@@ -42,6 +44,13 @@ function App() {
           currentLine={currentLine}
           active={isTranslating || pythonCode.length > 0}
         />
+        <div style={{ gridColumn: '1 / -1', minHeight: 0 }} className="flex flex-col">
+          <ExplanationPanel
+            explanations={explanations}
+            currentLine={currentLine}
+            active={isTranslating || explanations.length > 0}
+          />
+        </div>
         <VariableMemory
           variables={variables}
           active={isExecuting || variables.length > 0}

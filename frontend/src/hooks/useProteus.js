@@ -21,6 +21,7 @@ export function useProteus() {
   const [output, setOutput] = useState([])
   const [phase, setPhase] = useState(PHASES.IDLE)
   const [translations, setTranslations] = useState([])
+  const [explanations, setExplanations] = useState([])
   const [currentLine, setCurrentLine] = useState(-1)
   const [error, setError] = useState(null)
   const [aiEnabled, setAiEnabled] = useState(false)
@@ -46,6 +47,7 @@ export function useProteus() {
     setVariables([])
     setOutput([])
     setTranslations([])
+    setExplanations([])
     setCurrentLine(-1)
     setError(null)
 
@@ -92,6 +94,14 @@ export function useProteus() {
       setTranslations(prev => [...prev, lines[i]])
       setPythonCode(prev => [...prev, lines[i].python])
       await sleep(200)
+    }
+
+    // Animate explanations appearing one by one
+    const explainData = translateData.explanations || []
+    for (let i = 0; i < explainData.length; i++) {
+      if (abortRef.current) return
+      setExplanations(prev => [...prev, explainData[i]])
+      await sleep(150)
     }
 
     addOutput('> Translation complete.', 'system')
@@ -193,6 +203,7 @@ export function useProteus() {
     setVariables([])
     setOutput([])
     setTranslations([])
+    setExplanations([])
     setCurrentLine(-1)
     setError(null)
     setPhase(PHASES.IDLE)
@@ -206,6 +217,7 @@ export function useProteus() {
     output,
     phase,
     translations,
+    explanations,
     currentLine,
     error,
     runProgram,
