@@ -68,43 +68,53 @@ git clone https://github.com/Positivitty/proteus.git
 cd proteus
 ```
 
-### 2. Set up the backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-### 3. (Optional) Enable AI mode
+### 2. (Optional) Enable AI mode
 
 To translate _any_ English instruction (not just built-in patterns), add your Anthropic API key:
 
 ```bash
-cp .env.example .env
-# Edit .env and add your key from https://console.anthropic.com/settings/keys
+cp backend/.env.example backend/.env
+# Edit backend/.env and add your key from https://console.anthropic.com/settings/keys
 ```
 
 Without a key, the app still works using the built-in regex patterns. With a key, unrecognized commands are sent to Claude Haiku (~$0.0005 per call).
 
-### 4. Start the backend
+### 3. Quick start (recommended)
 
 ```bash
-uvicorn main:app --reload
+./start.sh
 ```
 
-The API server runs at `http://localhost:8000`.
+This installs dependencies and starts both servers. The app opens at `http://localhost:3000`.
 
-### 5. Start the frontend
+If port 8000 is already in use, pass a different port:
 
-In a separate terminal:
+```bash
+./start.sh 9000
+```
 
+### Manual start
+
+If you prefer to start each server separately:
+
+**Backend:**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+**Frontend** (in a separate terminal):
 ```bash
 cd frontend
 npm install
-npm run dev
+VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
-The app opens at `http://localhost:3000`.
+If using a custom backend port, set `VITE_API_URL` to match:
+```bash
+VITE_API_URL=http://localhost:9000 npm run dev
+```
 
 ## Project Structure
 
